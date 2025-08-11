@@ -4,6 +4,42 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 
+// 获取基础URL的辅助函数
+const getBaseUrl = (req: Request): string => {
+  // 1. 优先使用APP_URL环境变量
+  if (process.env.APP_URL) {
+    console.log('使用APP_URL环境变量:', process.env.APP_URL);
+    return process.env.APP_URL;
+  }
+  
+  // 2. 从请求头中获取Vercel URL
+  const vercelUrlFromHeader = req.headers['x-vercel-url'] || req.headers['vercel-url'];
+  if (vercelUrlFromHeader && typeof vercelUrlFromHeader === 'string') {
+    const url = `https://${vercelUrlFromHeader}`;
+    console.log('使用请求头中的Vercel URL:', url);
+    return url;
+  }
+  
+  // 3. 从环境变量中获取Vercel URL
+  if (process.env.VERCEL_URL) {
+    const url = `https://${process.env.VERCEL_URL}`;
+    console.log('使用环境变量中的Vercel URL:', url);
+    return url;
+  }
+  
+  // 4. 从命令行参数中获取Vercel URL
+  const vercelUrlFromArgs = process.argv.find(arg => arg.startsWith('VERCEL_URL='))?.split('=')[1];
+  if (vercelUrlFromArgs) {
+    const url = `https://${vercelUrlFromArgs}`;
+    console.log('使用命令行参数中的Vercel URL:', url);
+    return url;
+  }
+  
+  // 5. 最后使用本地开发URL
+  console.log('使用本地开发URL: http://localhost:5173');
+  return 'http://localhost:5173';
+};
+
 // 生成二维码接口
 router.post('/generate', async (req: Request, res: Response) => {
   try {
@@ -13,8 +49,10 @@ router.post('/generate', async (req: Request, res: Response) => {
     const qrUuid = uuid || uuidv4();
     
     // 构建二维码URL
-    const baseUrl = process.env.APP_URL || 'http://localhost:5173';
+    const baseUrl = getBaseUrl(req);
     const qrUrl = `${baseUrl}/${qrUuid}`;
+    
+    console.log('生成二维码URL:', qrUrl);
 
     // 生成二维码配置
     const qrOptions = {
@@ -43,7 +81,8 @@ router.post('/generate', async (req: Request, res: Response) => {
           uuid: qrUuid,
           url: qrUrl,
           qr_code: qrData,
-          format: 'svg'
+          format: 'svg',
+          base_url: baseUrl
         }
       });
     } else {
@@ -56,7 +95,8 @@ router.post('/generate', async (req: Request, res: Response) => {
           uuid: qrUuid,
           url: qrUrl,
           qr_code: qrData,
-          format: 'png'
+          format: 'png',
+          base_url: baseUrl
         }
       });
     }
@@ -84,7 +124,9 @@ router.get('/:uuid', async (req: Request, res: Response) => {
     }
 
     // 构建二维码URL
-    const baseUrl = process.env.APP_URL || 'http://localhost:5173';
+    // 使用环境变量中的APP_URL，如果在Vercel上部署，则使用VERCEL_URL
+    const baseUrl = process.env.APP_URL || 
+                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
     const qrUrl = `${baseUrl}/${uuid}`;
 
     // 生成二维码配置

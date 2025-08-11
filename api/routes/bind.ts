@@ -6,6 +6,9 @@ const router = express.Router();
 
 // 车主绑定接口
 router.post('/', async (req: Request, res: Response) => {
+  console.log('收到绑定请求:', JSON.stringify(req.body, null, 2));
+  console.log('请求头:', JSON.stringify(req.headers, null, 2));
+  
   try {
     const {
       uuid,
@@ -20,6 +23,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     // 验证必填字段
     if (!uuid) {
+      console.log('缺少UUID字段');
       return res.status(400).json({
         success: false,
         error: 'UUID is required'
@@ -28,18 +32,31 @@ router.post('/', async (req: Request, res: Response) => {
 
     // 验证至少有一种联系方式
     if (!phone && !email && !wechat_id && !whatsapp_number) {
+      console.log('缺少联系方式');
       return res.status(400).json({
         success: false,
         error: 'At least one contact method is required'
       });
     }
 
+    console.log(`检查UUID是否存在: ${uuid}`);
     // 检查UUID是否已存在
-    const { data: existingOwner } = await supabase
+    const { data: existingOwner, error: queryError } = await supabase
       .from('owners')
       .select('*')
       .eq('uuid', uuid)
       .single();
+    
+    if (queryError && queryError.code !== 'PGRST116') { // PGRST116是未找到记录的错误
+      console.error('查询数据库错误:', queryError);
+      return res.status(500).json({
+        success: false,
+        error: 'Database query error',
+        details: queryError.message
+      });
+    }
+
+    console.log('现有车主数据:', existingOwner);
 
     const ownerData = {
       uuid,
@@ -59,8 +76,11 @@ router.post('/', async (req: Request, res: Response) => {
       is_active: true
     };
 
+    console.log('准备保存的数据:', ownerData);
+
     let result;
     if (existingOwner) {
+      console.log('更新现有记录');
       // 更新现有记录
       result = await supabase
         .from('owners')
@@ -69,6 +89,7 @@ router.post('/', async (req: Request, res: Response) => {
         .select()
         .single();
     } else {
+      console.log('创建新记录');
       // 创建新记录
       result = await supabase
         .from('owners')
@@ -78,13 +99,15 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     if (result.error) {
-      console.error('Database error:', result.error);
+      console.error('数据库操作错误:', result.error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to save owner information'
+        error: 'Failed to save owner information',
+        details: result.error.message
       });
     }
 
+    console.log('保存成功:', result.data);
     res.json({
       success: true,
       data: result.data,
@@ -92,10 +115,11 @@ router.post('/', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Bind API error:', error);
+    console.error('绑定API错误:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
     });
   }
 });

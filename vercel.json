@@ -8,5 +8,13 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "APP_URL": "https://car.qr.move.chendashi.cn"
+  },
+  "build": {
+    "env": {
+      "VITE_API_URL": "https://car.qr.move.chendashi.cn/api"
+    }
+  }
 }

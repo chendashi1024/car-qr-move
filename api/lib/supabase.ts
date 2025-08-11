@@ -16,7 +16,25 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false
-  }
+  },
+  // 添加全局请求设置
+  global: {
+    fetch: (url, options) => {
+      console.log(`Supabase请求: ${url}`);
+      return fetch(url, {
+        ...options,
+        // 设置超时为30秒
+        signal: AbortSignal.timeout(30000),
+      });
+    },
+  },
+  // 添加重试机制
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    timeout: 30000,
+  },
 });
 
 // 数据库类型定义

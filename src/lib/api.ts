@@ -7,6 +7,42 @@ interface ApiResponse<T = any> {
   message?: string;
 }
 
+// 重试函数
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, retryDelay = 1000): Promise<Response> {
+  let lastError: Error;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      console.log(`尝试请求 (${i + 1}/${maxRetries}): ${url}`);
+      const response = await fetch(url, options);
+      if (response.ok) {
+        return response;
+      }
+      
+      // 如果是服务器错误(5xx)，则重试
+      if (response.status >= 500) {
+        lastError = new Error(`服务器错误: ${response.status}`);
+        console.log(`服务器错误 ${response.status}，准备重试...`);
+      } else {
+        // 对于客户端错误(4xx)，不重试
+        return response;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log(`网络错误: ${lastError.message}，准备重试...`);
+    }
+    
+    // 等待一段时间后重试
+    if (i < maxRetries - 1) {
+      const delay = retryDelay * Math.pow(2, i); // 指数退避策略
+      console.log(`等待 ${delay}ms 后重试...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -22,11 +58,14 @@ class ApiClient {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      // 添加超时设置
+      signal: AbortSignal.timeout(30000), // 30秒超时
       ...options,
     };
 
     try {
-      const response = await fetch(url, config);
+      console.log(`API请求: ${url}`);
+      const response = await fetchWithRetry(url, config, 3, 1000);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Network error' }));
@@ -41,7 +80,7 @@ class ApiClient {
   }
 
   // 生成二维码
-  async generateQR(data: { uuid?: string; format?: string; size?: number }): Promise<ApiResponse<{ uuid: string; qr_code: string }>> {
+  async generateQR(data: { license_plate?: string; format?: string; size?: number }): Promise<ApiResponse<{ uuid: string; url: string; qr_code: string }>> {
     return this.request('/api/qr/generate', {
       method: 'POST',
       body: JSON.stringify(data),

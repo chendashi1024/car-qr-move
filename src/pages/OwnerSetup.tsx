@@ -141,15 +141,17 @@ export default function OwnerSetup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!uuid || !validateForm()) {
+      console.log('表单验证失败');
       return;
     }
-
+    
     setSaving(true);
     setError(null);
 
     try {
+      console.log('提交表单数据:', formData);
       // 转换为API期望的格式
       const apiData = {
         uuid,
@@ -167,7 +169,9 @@ export default function OwnerSetup() {
         },
       };
 
+      console.log('准备发送到API的数据:', apiData);
       const response = await api.bindOwner(apiData);
+      console.log('API响应:', response);
 
       if (response.success) {
         setSuccess(true);
@@ -175,11 +179,11 @@ export default function OwnerSetup() {
           navigate(`/${uuid}`);
         }, 2000);
       } else {
-        setError("保存失败，请重试");
+        setError(response.error || response.message || "保存失败，请重试");
       }
     } catch (err) {
-      setError("网络错误，请重试");
-      console.error("Save error:", err);
+      console.error('保存错误:', err);
+      setError(err instanceof Error ? err.message : "网络错误，请重试");
     } finally {
       setSaving(false);
     }
